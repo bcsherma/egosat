@@ -1,3 +1,8 @@
+# Ignore tags files and editor directories
+*.vscode
+*.idea
+*tags*
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
