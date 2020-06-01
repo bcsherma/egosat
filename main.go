@@ -1,7 +1,18 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/bcsherma/egosat/egosat"
+)
 
 func main() {
-	fmt.Println("Hello, world!")
+	solver := egosat.CreateSolver("data/basic.cnf")
+	result := solver.Search()
+	if result == egosat.LFALSE {
+		fmt.Println("UNSATISFIABLE")
+	} else {
+		fmt.Println("SATISFIABLE")
+		solver.PrintModel()
+	}
 }
