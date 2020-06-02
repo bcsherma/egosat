@@ -27,7 +27,7 @@ func (solver *Solver) decisionLevel() int {
 
 // numVariables returns the number of variables in the formula
 func (solver *Solver) numVariables() int {
-	return len(solver.assignments)
+	return len(solver.assignments) - 1
 }
 
 // numClauses returns the number of clauses in the formula
