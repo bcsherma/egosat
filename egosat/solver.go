@@ -2,6 +2,8 @@ package egosat
 
 import "fmt"
 
+// Solver contains the formula and the useful data structures for representing
+// the state of the solver.
 type Solver struct {
 	clauses             []Clause
 	learntClauses       []Clause
@@ -55,25 +57,37 @@ func (solver *Solver) varValue(variable int) Lbool {
 	return solver.assignments[variable]
 }
 
+// litValues returns the current assignment to the given Lit
+func (solver *Solver) litValue(lit Lit) Lbool {
+	varAsg := solver.assignments[lit.variable()]
+	if varAsg == LNULL {
+		return LNULL
+	}
+	if lit.polarity() == varAsg {
+		return LTRUE
+	}
+	return LFALSE
+}
+
 // addClause adds a new clause to the solver
-func (solver *Solver) addClause(lits []Lit, learnt bool) bool {
+func (solver *Solver) addClause(lits []Lit, learnt bool) (bool, *Clause) {
 	if !learnt {
 		seen := make(map[Lit]bool)
 		for _, l := range lits {
 			if solver.litValue(l) == LTRUE {
-				return true
+				return true, nil
 			}
 			if _, ok := seen[l.negation()]; ok {
-				return true
+				return true, nil
 			}
 			seen[l] = true
 		}
 	}
 	if len(lits) == 0 {
-		return false
+		return false, nil
 	}
 	if len(lits) == 1 {
-		return solver.Enqueue(lits[0], nil)
+		return solver.Enqueue(lits[0], nil), nil
 	}
 	clause := Clause{
 		lits:     lits,
@@ -90,7 +104,7 @@ func (solver *Solver) addClause(lits []Lit, learnt bool) bool {
 	}
 	solver.addWatcher(lits[0].negation(), c)
 	solver.addWatcher(lits[1].negation(), c)
-	return true
+	return true, c
 }
 
 // addWatcher adds a clause to the watch list of a literal
@@ -112,22 +126,12 @@ func (solver *Solver) removeWatcher(lit Lit, clause *Clause) {
 	}
 }
 
+// clearWatchers removes and returns all clauses from the watcher list of the
+// given literal
 func (solver *Solver) clearWatchers(lit Lit) (clauses []*Clause) {
 	clauses = solver.watcherLists[lit.index()]
 	solver.watcherLists[lit.index()] = []*Clause{}
 	return
-}
-
-// litValues returns the current assignment to the given Lit
-func (solver *Solver) litValue(lit Lit) int {
-	varAsg := solver.assignments[lit.variable()]
-	if varAsg == LNULL {
-		return LNULL
-	}
-	if lit.polarity() == varAsg {
-		return LTRUE
-	}
-	return LFALSE
 }
 
 // Enqueue adds a literal to the propagation queue
@@ -187,8 +191,8 @@ func (solver *Solver) cancelUntil(level int) {
 
 // record adds a learnt clause
 func (solver *Solver) record(lits []Lit) {
-	solver.addClause(lits, true)
-	solver.Enqueue(lits[0], &solver.learntClauses[len(solver.learntClauses)-1])
+	_, c := solver.addClause(lits, true)
+	solver.Enqueue(lits[0], c)
 }
 
 // Propagate invokes clause propagation for all watchers of each literal in the
@@ -215,7 +219,7 @@ func (solver *Solver) Analyze(confl *Clause) (learnt []Lit, level int) {
 	learnt = []Lit{0}
 	var seen = make([]bool, solver.numVariables()+1)
 	var counter = 0
-	var p Lit = LNULL
+	var p Lit = Lit(0)
 	var reason []Lit
 	for {
 		reason = confl.calcReason(p)
@@ -235,18 +239,18 @@ func (solver *Solver) Analyze(confl *Clause) (learnt []Lit, level int) {
 		}
 		for {
 			p = solver.trail[len(solver.trail)-1]
+			confl = solver.reasons[p.variable()]
+			solver.undoOne()
 			if seen[p.variable()] {
 				break
 			}
-			confl = solver.reasons[p.variable()]
-			solver.undoOne()
 		}
 		counter--
 		if counter < 1 {
 			break
 		}
 	}
-	learnt[0] = p
+	learnt[0] = p.negation()
 	return
 }
 
@@ -260,6 +264,8 @@ func (solver *Solver) pickVar() Lit {
 	panic("Unable to select a variable for assignment")
 }
 
+// Search will search for a satisfying assignment until one is found or it has
+// established that the formula is unsatisfiable
 func (solver *Solver) Search() Lbool {
 	var conflict *Clause
 	var numConflicts int
@@ -275,7 +281,11 @@ func (solver *Solver) Search() Lbool {
 			solver.record(learnt)
 		} else {
 			if solver.numAssigns() == solver.numVariables() {
-				return LTRUE
+				if solver.checkAsg() {
+					return LTRUE
+				} else {
+					panic("invalid satisfying assignment detected through search")
+				}
 			}
 			l := solver.pickVar()
 			solver.assume(l)
@@ -283,8 +293,27 @@ func (solver *Solver) Search() Lbool {
 	}
 }
 
-// PrintAsg prints out the model
+// checkAsg checks that the current assignment satisfies all clauses
+func (solver *Solver) checkAsg() bool {
+	for i, c := range solver.clauses {
+		violated := true
+		for _, l := range c.lits {
+			if solver.litValue(l) == LTRUE {
+				fmt.Printf("%d clause %v satisfied by=%v\n", i, c, l)
+				violated = false
+				break
+			}
+		}
+		if violated {
+			return false
+		}
+	}
+	return true
+}
+
+// PrintModel prints out the model in DIMACS format.
 func (solver *Solver) PrintModel() {
+	fmt.Print("v ")
 	for i := 1; i < len(solver.assignments); i++ {
 		switch solver.assignments[i] {
 		case LFALSE:
@@ -295,4 +324,5 @@ func (solver *Solver) PrintModel() {
 			panic(fmt.Errorf("variable %d is unassigned", i))
 		}
 	}
+	fmt.Print("0\n")
 }

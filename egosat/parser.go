@@ -30,6 +30,8 @@ func CreateSolver(filename string) (solver *Solver) {
 // the given solver
 func parseClauses(reader *bufio.Reader, solver *Solver) {
 	for {
+		// TODO: This requires a newline at the end of the file, should accept
+		// formulae without a newline at the end
 		nextLine, err := reader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
@@ -46,7 +48,7 @@ func parseClauses(reader *bufio.Reader, solver *Solver) {
 			}
 			newClause = append(newClause, Lit(litVal))
 		}
-		if !solver.addClause(newClause, false) {
+		if ok, _ := solver.addClause(newClause, false); !ok {
 			panic("Formula is trivially unsatisfiable!")
 		}
 	}

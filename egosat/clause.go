@@ -1,16 +1,17 @@
 package egosat
 
+// Clause is the struct used for storing all CNF clauses
 type Clause struct {
-	learnt   bool
-	activity float32
-	lits     []Lit
+	learnt   bool    // Indicates whether clause was learnt or not
+	activity float32 // Gives the activity of the clause
+	lits     []Lit   //
 }
 
 // simplify simplifies returns true if the invoking clause is trivially
 // satisfiable, and otherwise will eliminate any false literals from the clause
 // before returning false.
 func (clause *Clause) simplify(solver *Solver) bool {
-	var j, val int
+	var j, val Lbool
 	for _, l := range clause.lits {
 		val = solver.litValue(l)
 		if val == LTRUE {
@@ -57,7 +58,7 @@ func (clause *Clause) propagate(solver *Solver, lit Lit) bool {
 // the negation of every literal except the first literal.
 func (clause *Clause) calcReason(lit Lit) (reason []Lit) {
 	var i int
-	if lit == LNULL {
+	if lit == Lit(0) {
 		i = 0
 	} else {
 		i = 1

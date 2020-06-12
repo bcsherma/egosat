@@ -1,13 +1,19 @@
 package egosat
 
+// Lit is used to represent literals
 type Lit int
 
+// Lbool is used to represent boolean values with the possibility of null,
+// or undetermined.
 type Lbool int
 
 const (
-	LNULL  = iota
-	LTRUE  = iota
-	LFALSE = iota
+	// LNULL indicates a non-true, non-false boolean value
+	LNULL = Lbool(iota)
+	// LTRUE indicates a true boolean value
+	LTRUE = Lbool(iota)
+	// LFALSE indicates the boolean value false
+	LFALSE = Lbool(iota)
 )
 
 // polarity returns the polarity of this literal
