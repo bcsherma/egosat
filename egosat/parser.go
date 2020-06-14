@@ -14,13 +14,19 @@ func CreateSolver(filename string) (solver *Solver) {
 	reader := createFormulaReader(filename)
 	nVars, nClauses := parseProblemLine(reader)
 	solver = &Solver{
-		clauses:       make([]Clause, 0, nClauses),
-		learntClauses: make([]Clause, 0, 100),
-		watcherLists:  make([][]*Clause, 2*nVars),
-		assignments:   make([]Lbool, nVars+1),
-		trail:         make([]Lit, 0, nVars),
-		reasons:       make([]*Clause, nVars+1),
-		level:         make([]int, nVars+1),
+		clauses:          make([]*Clause, 0, nClauses),
+		learntClauses:    make([]*Clause, 0, 100),
+		watcherLists:     make([][]*Clause, 2*nVars),
+		assignments:      make([]Lbool, nVars+1),
+		trail:            make([]Lit, 0, nVars),
+		reasons:          make([]*Clause, nVars+1),
+		level:            make([]int, nVars+1),
+		variableActivity: make([]float32, nVars+1),
+	}
+	solver.variableOrder = createQueue(solver, nVars)
+	for i := 1; i <= nVars; i++ {
+		solver.variableActivity[i] = 1e6
+		solver.variableOrder.insert(i)
 	}
 	parseClauses(reader, solver)
 	return
@@ -52,7 +58,6 @@ func parseClauses(reader *bufio.Reader, solver *Solver) {
 			panic("Formula is trivially unsatisfiable!")
 		}
 	}
-
 }
 
 // createFormulaReader will open a reader for the formula with the comment

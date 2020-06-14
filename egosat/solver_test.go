@@ -7,8 +7,8 @@ import (
 func TestAddClause(t *testing.T) {
 	nVars := 10
 	solver := &Solver{
-		clauses:       make([]Clause, 0, 10),
-		learntClauses: make([]Clause, 0, 100),
+		clauses:       make([]*Clause, 0, 10),
+		learntClauses: make([]*Clause, 0, 100),
 		watcherLists:  make([][]*Clause, 2*nVars),
 		assignments:   make([]Lbool, nVars+1),
 		trail:         make([]Lit, 0, nVars),
@@ -44,34 +44,34 @@ func TestAddClause(t *testing.T) {
 
 func TestAddWatcher(t *testing.T) {
 	solver := Solver{
-		clauses: []Clause{
+		clauses: []*Clause{
 			{lits: []Lit{1, 2, 3}},
 		},
 		watcherLists: make([][]*Clause, 6),
 	}
-	solver.addWatcher(Lit(-2), &solver.clauses[0])
+	solver.addWatcher(Lit(-2), solver.clauses[0])
 	if len(solver.watcherLists[Lit(-2).index()]) != 1 {
 		t.Fail()
 	}
-	if solver.watcherLists[Lit(-2).index()][0] != &solver.clauses[0] {
+	if solver.watcherLists[Lit(-2).index()][0] != solver.clauses[0] {
 		t.Fail()
 	}
 }
 
 func TestRemoveWatcher(t *testing.T) {
-	solver := Solver{clauses: []Clause{{lits: []Lit{1, 2, 3}}}}
+	solver := Solver{clauses: []*Clause{{lits: []Lit{1, 2, 3}}}}
 	solver.watcherLists = [][]*Clause{
 		{},
-		{&solver.clauses[0]},
+		{solver.clauses[0]},
 		{},
-		{&solver.clauses[0]},
+		{solver.clauses[0]},
 		{},
 		{},
 	}
 	if len(solver.watcherLists[Lit(-2).index()]) != 1 {
 		t.Fail()
 	}
-	solver.removeWatcher(Lit(-2), &solver.clauses[0])
+	solver.removeWatcher(Lit(-2), solver.clauses[0])
 	if len(solver.watcherLists[Lit(-2).index()]) != 0 {
 		t.Fail()
 	}
@@ -161,9 +161,9 @@ func TestUndoOne(t *testing.T) {
 		assignments: []Lbool{LNULL, LTRUE, LFALSE, LNULL, LTRUE},
 		level:       []int{0, 1, 2, -1, 1},
 		trail:       []Lit{1, 4, -2},
-		clauses:     []Clause{{lits: []Lit{-1, -4}}},
+		clauses:     []*Clause{{lits: []Lit{-1, -4}}},
 	}
-	solver.reasons = []*Clause{nil, nil, nil, nil, &solver.clauses[0]}
+	solver.reasons = []*Clause{nil, nil, nil, nil, solver.clauses[0]}
 	solver.undoOne()
 	if solver.assignments[2] != LNULL || solver.level[2] != -1 {
 		t.Fail()
@@ -180,8 +180,8 @@ func TestUndoOne(t *testing.T) {
 func TestPropagate(t *testing.T) {
 	nVars := 10
 	solver := &Solver{
-		clauses:       make([]Clause, 0, 10),
-		learntClauses: make([]Clause, 0, 10),
+		clauses:       make([]*Clause, 0, 10),
+		learntClauses: make([]*Clause, 0, 10),
 		watcherLists:  make([][]*Clause, 2*nVars),
 		assignments:   make([]Lbool, nVars+1),
 		trail:         make([]Lit, 0, nVars),
@@ -203,8 +203,8 @@ func TestPropagate(t *testing.T) {
 func TestAnalyze(t *testing.T) {
 	nVars := 10
 	solver := &Solver{
-		clauses:       make([]Clause, 0, 10),
-		learntClauses: make([]Clause, 0, 10),
+		clauses:       make([]*Clause, 0, 10),
+		learntClauses: make([]*Clause, 0, 10),
 		watcherLists:  make([][]*Clause, 2*nVars),
 		assignments:   make([]Lbool, nVars+1),
 		trail:         make([]Lit, 0, nVars),
@@ -224,4 +224,24 @@ func TestAnalyze(t *testing.T) {
 		t.Fail()
 	}
 	t.Log(learnt, level)
+}
+
+func TestSearch(t *testing.T) {
+	nVars := 10
+	solver := &Solver{
+		clauses:       make([]*Clause, 0, 10),
+		learntClauses: make([]*Clause, 0, 10),
+		watcherLists:  make([][]*Clause, 2*nVars),
+		assignments:   make([]Lbool, nVars+1),
+		trail:         make([]Lit, 0, nVars),
+		reasons:       make([]*Clause, nVars+1),
+		level:         make([]int, nVars+1),
+	}
+	solver.addClause([]Lit{1, 2}, false)
+	solver.addClause([]Lit{-1, 2}, false)
+	solver.addClause([]Lit{-1, -2}, false)
+	solver.addClause([]Lit{1, -2}, false)
+	if solver.Search() != LFALSE {
+		t.Fail()
+	}
 }

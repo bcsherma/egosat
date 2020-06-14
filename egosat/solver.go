@@ -1,18 +1,21 @@
 package egosat
 
-import "fmt"
+import (
+	"fmt"
+	"math/rand"
+)
 
 // Solver contains the formula and the useful data structures for representing
 // the state of the solver.
 type Solver struct {
-	clauses             []Clause
-	learntClauses       []Clause
+	clauses             []*Clause
+	learntClauses       []*Clause
 	clauseActivityInc   float32
 	clauseActivityDecay float32
 	varActivityInc      float32
 	varActivityDecay    float32
 	variableActivity    []float32
-	variableOrder       []int
+	variableOrder       *queue
 	watcherLists        [][]*Clause
 	propQueue           []Lit
 	assignments         []Lbool
@@ -23,19 +26,13 @@ type Solver struct {
 }
 
 // decisionLevel returns the current decision level of the solver.
-func (solver *Solver) decisionLevel() int {
-	return len(solver.trailDelim)
-}
+func (solver *Solver) decisionLevel() int { return len(solver.trailDelim) }
 
 // numVariables returns the number of variables in the formula
-func (solver *Solver) numVariables() int {
-	return len(solver.assignments) - 1
-}
+func (solver *Solver) numVariables() int { return len(solver.assignments) - 1 }
 
 // numClauses returns the number of clauses in the formula
-func (solver *Solver) numClauses() int {
-	return len(solver.clauses)
-}
+func (solver *Solver) numClauses() int { return len(solver.clauses) }
 
 // numLearnts returns the number of learnt clauses in the formula
 func (solver *Solver) numLearnts() int {
@@ -53,9 +50,7 @@ func (solver *Solver) numAssigns() (n int) {
 }
 
 // varValue returns the current assignment to the given variable
-func (solver *Solver) varValue(variable int) Lbool {
-	return solver.assignments[variable]
-}
+func (solver *Solver) varValue(variable int) Lbool { return solver.assignments[variable] }
 
 // litValues returns the current assignment to the given Lit
 func (solver *Solver) litValue(lit Lit) Lbool {
@@ -89,22 +84,19 @@ func (solver *Solver) addClause(lits []Lit, learnt bool) (bool, *Clause) {
 	if len(lits) == 1 {
 		return solver.Enqueue(lits[0], nil), nil
 	}
-	clause := Clause{
+	clause := &Clause{
 		lits:     lits,
 		learnt:   learnt,
 		activity: 0.0,
 	}
-	var c *Clause
 	if learnt {
 		solver.learntClauses = append(solver.learntClauses, clause)
-		c = &solver.learntClauses[len(solver.learntClauses)-1]
 	} else {
 		solver.clauses = append(solver.clauses, clause)
-		c = &solver.clauses[len(solver.clauses)-1]
 	}
-	solver.addWatcher(lits[0].negation(), c)
-	solver.addWatcher(lits[1].negation(), c)
-	return true, c
+	solver.addWatcher(lits[0].negation(), clause)
+	solver.addWatcher(lits[1].negation(), clause)
+	return true, clause
 }
 
 // addWatcher adds a clause to the watch list of a literal
@@ -165,6 +157,7 @@ func (solver *Solver) undoOne() {
 	solver.reasons[v] = nil
 	solver.level[v] = -1
 	solver.trail = solver.trail[:len(solver.trail)-1]
+	solver.variableOrder.insert(v)
 }
 
 // Assumes one literal value
@@ -193,6 +186,11 @@ func (solver *Solver) cancelUntil(level int) {
 func (solver *Solver) record(lits []Lit) {
 	_, c := solver.addClause(lits, true)
 	solver.Enqueue(lits[0], c)
+}
+
+// varActivityCmp compares the activity of two variables
+func (solver *Solver) varActivityCmp(var1 int, var2 int) bool {
+	return solver.variableActivity[var1] < solver.variableActivity[var2]
 }
 
 // Propagate invokes clause propagation for all watchers of each literal in the
@@ -256,12 +254,27 @@ func (solver *Solver) Analyze(confl *Clause) (learnt []Lit, level int) {
 
 // pickVar selects a variable for assumption
 func (solver *Solver) pickVar() Lit {
-	for i := 1; i < len(solver.assignments); i++ {
-		if solver.assignments[i] == LNULL {
-			return Lit(i)
+	for {
+		v := solver.variableOrder.removeMin()
+		if solver.assignments[v] == LNULL {
+			if rand.Float64() < 0.5 {
+				return Lit(-1 * v)
+			}
+			return Lit(v)
 		}
 	}
-	panic("Unable to select a variable for assignment")
+}
+
+func (solver *Solver) bumpVar(v int) {
+	solver.variableActivity[v] += solver.varActivityInc
+	if solver.variableOrder.contains(v) {
+		solver.variableOrder.moveUp(v)
+	}
+	if solver.variableActivity[v] > 1e6 {
+		for i := 1; i < len(solver.variableActivity); i++ {
+			solver.variableActivity[i] *= 1e-6
+		}
+	}
 }
 
 // Search will search for a satisfying assignment until one is found or it has
@@ -273,6 +286,9 @@ func (solver *Solver) Search() Lbool {
 		conflict = solver.Propagate()
 		if conflict != nil {
 			numConflicts++
+			for _, l := range conflict.lits {
+				solver.bumpVar(l.variable())
+			}
 			if solver.decisionLevel() == 0 {
 				return LFALSE
 			}
@@ -283,9 +299,8 @@ func (solver *Solver) Search() Lbool {
 			if solver.numAssigns() == solver.numVariables() {
 				if solver.checkAsg() {
 					return LTRUE
-				} else {
-					panic("invalid satisfying assignment detected through search")
 				}
+				panic("invalid satisfying assignment detected through search")
 			}
 			l := solver.pickVar()
 			solver.assume(l)
@@ -295,11 +310,10 @@ func (solver *Solver) Search() Lbool {
 
 // checkAsg checks that the current assignment satisfies all clauses
 func (solver *Solver) checkAsg() bool {
-	for i, c := range solver.clauses {
+	for _, c := range solver.clauses {
 		violated := true
 		for _, l := range c.lits {
 			if solver.litValue(l) == LTRUE {
-				fmt.Printf("%d clause %v satisfied by=%v\n", i, c, l)
 				violated = false
 				break
 			}
@@ -326,3 +340,7 @@ func (solver *Solver) PrintModel() {
 	}
 	fmt.Print("0\n")
 }
+
+func (solver *Solver) trimLearnts() {}
+
+func (solver *Solver) simplifyLearnts() {}
