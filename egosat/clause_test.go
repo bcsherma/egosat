@@ -24,7 +24,7 @@ func TestSimplify(t *testing.T) {
 // assignments.
 func TestClausePropagate(t *testing.T) {
 	solver := Solver{
-		clauses: []Clause{
+		clauses: []*Clause{
 			{lits: []Lit{-1, 2, 3}},
 			{lits: []Lit{1, -2, 3}},
 			{lits: []Lit{1, 2, -3}},
@@ -32,10 +32,10 @@ func TestClausePropagate(t *testing.T) {
 		assignments: []Lbool{LNULL, LTRUE, LNULL, LNULL},
 	}
 	solver.watcherLists = [][]*Clause{
-		{&solver.clauses[0]},                     // watch lists for 1
-		{&solver.clauses[1], &solver.clauses[2]}, // watch lists for -1
-		{&solver.clauses[1]},
-		{&solver.clauses[0], &solver.clauses[2]},
+		{solver.clauses[0]},                    // watch lists for 1
+		{solver.clauses[1], solver.clauses[2]}, // watch lists for -1
+		{solver.clauses[1]},
+		{solver.clauses[0], solver.clauses[2]},
 		{},
 		{},
 	}
@@ -44,7 +44,7 @@ func TestClausePropagate(t *testing.T) {
 	if len(solver.watcherLists[Lit(-3).index()]) != 1 {
 		t.Fail()
 	}
-	if solver.watcherLists[Lit(-3).index()][0] != &solver.clauses[0] {
+	if solver.watcherLists[Lit(-3).index()][0] != solver.clauses[0] {
 		t.Fail()
 	}
 }
