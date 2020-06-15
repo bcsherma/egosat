@@ -50,7 +50,7 @@ func TestClausePropagate(t *testing.T) {
 }
 
 // TestCalcReason tests the calc_reason method of the clause struct. This method
-// should return the literal assignments that force make the clause unsatisifed.
+// should return the literal assignments that force make the clause unsatisfied.
 // If the lit argument of calcreason is not null then it is assumed to be the
 // first literal of the clause and is not returned.
 func TestCalcReason(t *testing.T) {
