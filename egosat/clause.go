@@ -48,7 +48,7 @@ func (clause *Clause) propagate(solver *Solver, lit Lit) bool {
 		}
 	}
 	solver.addWatcher(lit, clause)
-	return solver.Enqueue(clause.lits[0], clause)
+	return solver.enqueue(clause.lits[0], clause)
 }
 
 // calcReason will compute the assignments that force the clause to be
@@ -67,4 +67,12 @@ func (clause *Clause) calcReason(lit Lit) (reason []Lit) {
 		reason = append(reason, clause.lits[i].negation())
 	}
 	return
+}
+
+// removeWatched will remove the clause from the watcher lists of its first two
+// literals
+func (clause *Clause) removeWatched(solver *Solver) {
+	for i := 0; i < 2; i++ {
+		solver.removeWatcher(clause.lits[i], clause)
+	}
 }
