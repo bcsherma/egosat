@@ -5,22 +5,32 @@ import (
 	"math/rand"
 )
 
+// The SolverParams struct stores the solver parameters pertaining to search.
+type SolverParams struct {
+	MaxConflict         int     // Number of conflicts before restart is required
+	MaxLearnts          int     // Maximum number of learnt clauses to store at one time
+	VarActivityDecay    float32 // Decay factor for variable activities
+	ClauseActivityDecay float32 // Decay factor for clause activities
+}
+
 // The Solver struct contains the formula as well as the state of the solver
 // over the course of solving the formulae.
 type Solver struct {
-	clauses           []*Clause
-	learntClauses     []*Clause
-	clauseActivityInc float32
-	varActivityInc    float32
-	variableActivity  []float32
-	variableOrder     *queue
-	watcherLists      [][]*Clause
-	propQueue         []Lit
-	assignments       []Lbool
-	trail             []Lit
-	trailDelim        []int
-	reasons           []*Clause
-	level             []int
+	clauses             []*Clause
+	learntClauses       []*Clause
+	clauseActivityInc   float32
+	clauseActivityDecay float32
+	varActivityInc      float32
+	varActivityDecay    float32
+	variableActivity    []float32
+	variableOrder       *queue
+	watcherLists        [][]*Clause
+	propQueue           []Lit
+	assignments         []Lbool
+	trail               []Lit
+	trailDelim          []int
+	reasons             []*Clause
+	level               []int
 }
 
 // CreateSolver creates a new Solver for a formulae with the given number of
@@ -92,7 +102,7 @@ func (solver *Solver) AddClause(lits []Lit, learnt bool) (bool, *Clause) {
 // If the conflict limit is reached, no conclusion can be drawn about whether
 // the formula is satisfiable or not. In the case of (iii), Search can be
 // reinvoked until (i) or (ii) occur.
-func (solver *Solver) Search(maxLearnts int, maxConflict int) Lbool {
+func (solver *Solver) Search(params SolverParams) Lbool {
 	var conflict *Clause
 	var numConflicts int
 	for {
@@ -109,8 +119,10 @@ func (solver *Solver) Search(maxLearnts int, maxConflict int) Lbool {
 			learnt, level := solver.analyze(conflict)
 			solver.cancelUntil(level)
 			solver.record(learnt)
+			solver.varActivityInc *= params.VarActivityDecay
+			solver.clauseActivityInc *= params.ClauseActivityDecay
 		} else {
-			if len(solver.learntClauses) > maxLearnts {
+			if len(solver.learntClauses) > params.MaxLearnts {
 				solver.trimLearnts()
 			}
 			if solver.numAssigns() == solver.numVariables() {
@@ -119,7 +131,7 @@ func (solver *Solver) Search(maxLearnts int, maxConflict int) Lbool {
 				}
 				panic("invalid satisfying assignment detected through search")
 			}
-			if numConflicts > maxConflict {
+			if numConflicts > params.MaxConflict {
 				solver.cancelUntil(0)
 				return LNULL
 			}

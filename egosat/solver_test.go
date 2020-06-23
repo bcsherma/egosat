@@ -211,7 +211,54 @@ func TestAnalyze(t *testing.T) {
 }
 
 func TestSearch(t *testing.T) {
-	solver := CreateSolver(10, 10)
+	nVars := 10
+	solver := &Solver{
+		clauses:          make([]*Clause, 0, 10),
+		learntClauses:    make([]*Clause, 0, 10),
+		watcherLists:     make([][]*Clause, 2*nVars),
+		assignments:      make([]Lbool, nVars+1),
+		trail:            make([]Lit, 0, nVars),
+		reasons:          make([]*Clause, nVars+1),
+		level:            make([]int, nVars+1),
+		variableActivity: make([]float32, nVars+1),
+	}
+	solver.variableOrder = createQueue(solver, nVars)
+	for i := 1; i <= nVars; i++ {
+		solver.variableActivity[i] = 1e6
+		solver.variableOrder.insert(i)
+	}
+	solver.AddClause([]Lit{1, 2}, false)
+	solver.AddClause([]Lit{-1, 2}, false)
+	solver.AddClause([]Lit{-1, -2}, false)
+	solver.AddClause([]Lit{1, -2}, false)
+	params := SolverParams{
+		MaxConflict:         100,
+		MaxLearnts:          100,
+		VarActivityDecay:    0.95,
+		ClauseActivityDecay: 0.65,
+	}
+	if solver.Search(params) != LFALSE {
+		t.Fail()
+	}
+}
+
+func TestSortLearnts(t *testing.T) {
+	nVars := 10
+	solver := &Solver{
+		clauses:          make([]*Clause, 0, 10),
+		learntClauses:    make([]*Clause, 0, 10),
+		watcherLists:     make([][]*Clause, 2*nVars),
+		assignments:      make([]Lbool, nVars+1),
+		trail:            make([]Lit, 0, nVars),
+		reasons:          make([]*Clause, nVars+1),
+		level:            make([]int, nVars+1),
+		variableActivity: make([]float32, nVars+1),
+	}
+	solver.variableOrder = createQueue(solver, nVars)
+	for i := 1; i <= nVars; i++ {
+		solver.variableActivity[i] = 1e6
+		solver.variableOrder.insert(i)
+	}
 	_, c1 := solver.AddClause([]Lit{1, 2, 3}, true)
 	c1.activity = 3.0
 	_, c2 := solver.AddClause([]Lit{1, 2, 3}, true)
