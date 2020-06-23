@@ -203,7 +203,7 @@ func TestPropagate(t *testing.T) {
 	solver.AddClause([]Lit{-1, -2}, false)
 	solver.AddClause([]Lit{2, -3}, false)
 	solver.assume(1)
-	solver.Propagate()
+	solver.propagate()
 	if solver.varValue(2) != LFALSE {
 		t.Fail()
 	}
@@ -233,11 +233,11 @@ func TestAnalyze(t *testing.T) {
 	solver.AddClause([]Lit{2, -3}, false)
 	solver.AddClause([]Lit{-1, 2, 3}, false)
 	solver.assume(1)
-	confl := solver.Propagate()
+	confl := solver.propagate()
 	if confl == nil {
 		t.Fail()
 	}
-	learnt, level := solver.Analyze(confl)
+	learnt, level := solver.analyze(confl)
 	if level != 0 {
 		t.Fail()
 	}

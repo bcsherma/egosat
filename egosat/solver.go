@@ -5,8 +5,8 @@ import (
 	"math/rand"
 )
 
-// Solver contains the formula and the useful data structures for representing
-// the state of the solver.
+// The Solver struct contains the formula as well as the state of the solver
+// over the course of solving the formulae.
 type Solver struct {
 	clauses           []*Clause
 	learntClauses     []*Clause
@@ -23,6 +23,10 @@ type Solver struct {
 	level             []int
 }
 
+// CreateSolver creates a new Solver for a formulae with the given number of
+// variables and clauses. The number of variables given must be exact, but the
+// number of clauses is only used for pre-allocation of dynamically sized data
+// structures.
 func CreateSolver(nClauses, nVars int) *Solver {
 	solver := &Solver{
 		clauses:          make([]*Clause, 0, nClauses),
@@ -42,7 +46,11 @@ func CreateSolver(nClauses, nVars int) *Solver {
 	return solver
 }
 
-// AddClause adds a new clause to the solver
+// AddClause adds a clause to the Solver. The provided literals make up the
+// clause and the learnt flag indicates whether the clause is learnt, i.e.
+// deduced from the original formula, or part of the original formula. In
+// general, the case learnt=true should only be used by the internals of the
+// solver.
 func (solver *Solver) AddClause(lits []Lit, learnt bool) (bool, *Clause) {
 	if !learnt {
 		seen := make(map[Lit]bool)
@@ -77,13 +85,18 @@ func (solver *Solver) AddClause(lits []Lit, learnt bool) (bool, *Clause) {
 	return true, clause
 }
 
-// Search will search for a satisfying assignment until one is found or it has
-// established that the formula is unsatisfiable
+// Search will probe variable assignments until it either:
+//      i) Finds a satisfying assignment
+//      ii) Finds a conflict at the root level, meaning the formula is UNSAT
+//      iii) Reaches the conflict limit
+// If the conflict limit is reached, no conclusion can be drawn about whether
+// the formula is satisfiable or not. In the case of (iii), Search can be
+// reinvoked until (i) or (ii) occur.
 func (solver *Solver) Search(maxLearnts int, maxConflict int) Lbool {
 	var conflict *Clause
 	var numConflicts int
 	for {
-		conflict = solver.Propagate()
+		conflict = solver.propagate()
 		if conflict != nil {
 			numConflicts++
 			solver.bumpClause(conflict)
@@ -93,7 +106,7 @@ func (solver *Solver) Search(maxLearnts int, maxConflict int) Lbool {
 			if solver.decisionLevel() == 0 {
 				return LFALSE
 			}
-			learnt, level := solver.Analyze(conflict)
+			learnt, level := solver.analyze(conflict)
 			solver.cancelUntil(level)
 			solver.record(learnt)
 		} else {
@@ -116,7 +129,9 @@ func (solver *Solver) Search(maxLearnts int, maxConflict int) Lbool {
 	}
 }
 
-// PrintModel prints out the model in DIMACS format.
+// PrintModel should only be invoked when the solver has found a satisfying
+// assignment. When invoked it will print the satisfying assignment to stdout in
+// the DIMACS output format.
 func (solver *Solver) PrintModel() {
 	fmt.Print("v ")
 	for i := 1; i < len(solver.assignments); i++ {
@@ -135,18 +150,18 @@ func (solver *Solver) PrintModel() {
 // decisionLevel returns the current decision level of the solver.
 func (solver *Solver) decisionLevel() int { return len(solver.trailDelim) }
 
-// numVariables returns the number of variables in the formula
+// numVariables returns the number of variables in the formula.
 func (solver *Solver) numVariables() int { return len(solver.assignments) - 1 }
 
-// numClauses returns the number of clauses in the formula
+// numClauses returns the number of clauses in the formula.
 func (solver *Solver) numClauses() int { return len(solver.clauses) }
 
-// numLearnts returns the number of learnt clauses in the formula
+// numLearnts returns the number of learnt clauses in the formula.
 func (solver *Solver) numLearnts() int {
 	return len(solver.learntClauses)
 }
 
-// numAssigns returns the number of assignments that have been made
+// numAssigns returns the number of assignments that have been made.
 func (solver *Solver) numAssigns() (n int) {
 	for _, val := range solver.assignments[1:] {
 		if val != LNULL {
@@ -156,10 +171,12 @@ func (solver *Solver) numAssigns() (n int) {
 	return
 }
 
-// varValue returns the current assignment to the given variable
-func (solver *Solver) varValue(variable int) Lbool { return solver.assignments[variable] }
+// varValue returns the current assignment to the given variable.
+func (solver *Solver) varValue(variable int) Lbool {
+	return solver.assignments[variable]
+}
 
-// litValues returns the current assignment to the given Lit
+// litValues returns the current assignment to the given Lit.
 func (solver *Solver) litValue(lit Lit) Lbool {
 	varAsg := solver.assignments[lit.variable()]
 	if varAsg == LNULL {
@@ -171,13 +188,13 @@ func (solver *Solver) litValue(lit Lit) Lbool {
 	return LFALSE
 }
 
-// addWatcher adds a clause to the watch list of a literal
+// addWatcher adds a clause to the watch list of a literal.
 func (solver *Solver) addWatcher(lit Lit, clause *Clause) {
 	i := lit.index()
 	solver.watcherLists[i] = append(solver.watcherLists[i], clause)
 }
 
-// removeWatcher removes a clause from the watch list of a literal
+// removeWatcher removes a clause from the watch list of a literal.
 func (solver *Solver) removeWatcher(lit Lit, clause *Clause) {
 	i := lit.index()
 	for j := 0; j < len(solver.watcherLists[i]); j++ {
@@ -191,14 +208,14 @@ func (solver *Solver) removeWatcher(lit Lit, clause *Clause) {
 }
 
 // clearWatchers removes and returns all clauses from the watcher list of the
-// given literal
+// given literal.
 func (solver *Solver) clearWatchers(lit Lit) (clauses []*Clause) {
 	clauses = solver.watcherLists[lit.index()]
 	solver.watcherLists[lit.index()] = []*Clause{}
 	return
 }
 
-// enqueue adds a literal to the propagation queue
+// enqueue adds a literal to the propagation queue.
 func (solver *Solver) enqueue(lit Lit, from *Clause) bool {
 	if solver.litValue(lit) != 0 {
 		if solver.litValue(lit) == LTRUE {
@@ -214,14 +231,14 @@ func (solver *Solver) enqueue(lit Lit, from *Clause) bool {
 	return true
 }
 
-// Removes and returns the front of the queue
+// Removes and returns the front of the propagation queue.
 func (solver *Solver) dequeue() (lit Lit) {
 	lit = solver.propQueue[0]
 	solver.propQueue = solver.propQueue[1:]
 	return
 }
 
-// undoOne undoes a single assignment
+// undoOne undoes a single assignment.
 func (solver *Solver) undoOne() {
 	l := solver.trail[len(solver.trail)-1]
 	v := l.variable()
@@ -232,13 +249,14 @@ func (solver *Solver) undoOne() {
 	solver.variableOrder.insert(v)
 }
 
-// Assumes one literal value
+// assume will force the given literal to be true by assigning its variable.
 func (solver *Solver) assume(lit Lit) bool {
 	solver.trailDelim = append(solver.trailDelim, len(solver.trail))
 	return solver.enqueue(lit, nil)
 }
 
-// Cancels an assumption and the resulting assignments
+// cancel will undo the most recent assumption and all assignments that followed
+// from unit propagation.
 func (solver *Solver) cancel() {
 	numDel := len(solver.trail) - solver.trailDelim[len(solver.trailDelim)-1]
 	for ; numDel > 0; numDel-- {
@@ -247,27 +265,27 @@ func (solver *Solver) cancel() {
 	solver.trailDelim = solver.trailDelim[:len(solver.trailDelim)-1]
 }
 
-// cancel decisions until at the given level
+// cancel decisions until at the given decision level.
 func (solver *Solver) cancelUntil(level int) {
 	for solver.decisionLevel() > level {
 		solver.cancel()
 	}
 }
 
-// record adds a learnt clause
+// record adds a learnt clause.
 func (solver *Solver) record(lits []Lit) {
 	_, c := solver.AddClause(lits, true)
 	solver.enqueue(lits[0], c)
 }
 
-// varActivityCmp compares the activity of two variables
+// varActivityCmp compares the activity of two variables.
 func (solver *Solver) varActivityCmp(var1 int, var2 int) bool {
 	return solver.variableActivity[var1] < solver.variableActivity[var2]
 }
 
-// Propagate invokes clause propagation for all watchers of each literal in the
+// propagate invokes clause propagation for all watchers of each literal in the
 // queue until the queue is empty
-func (solver *Solver) Propagate() *Clause {
+func (solver *Solver) propagate() *Clause {
 	for len(solver.propQueue) > 0 {
 		l := solver.dequeue()
 		tmp := solver.clearWatchers(l)
@@ -284,8 +302,10 @@ func (solver *Solver) Propagate() *Clause {
 	return nil
 }
 
-// Analyze will assess the cause of a conflict
-func (solver *Solver) Analyze(confl *Clause) (learnt []Lit, level int) {
+// analyze generates a learnt clause from the given conflict clause and the
+// state of the solver. It returns the learnt clause and the decision level at
+// which the learnt clauses becomes unit.
+func (solver *Solver) analyze(confl *Clause) (learnt []Lit, level int) {
 	learnt = []Lit{0}
 	var seen = make([]bool, solver.numVariables()+1)
 	var counter = 0
@@ -324,7 +344,7 @@ func (solver *Solver) Analyze(confl *Clause) (learnt []Lit, level int) {
 	return
 }
 
-// pickVar selects a variable for assumption
+// pickVar selects the highest activity unbound variable for assumption.
 func (solver *Solver) pickVar() Lit {
 	for {
 		v := solver.variableOrder.removeMin()
@@ -337,6 +357,8 @@ func (solver *Solver) pickVar() Lit {
 	}
 }
 
+// bumpVar increases the activity level of the given variable and rescales all
+// activities if necessary.
 func (solver *Solver) bumpVar(v int) {
 	solver.variableActivity[v] += solver.varActivityInc
 	if solver.variableOrder.contains(v) {
@@ -349,6 +371,8 @@ func (solver *Solver) bumpVar(v int) {
 	}
 }
 
+// bumpClause increases the activity level of the given clause and rescales all
+// clause activities if necessary.
 func (solver *Solver) bumpClause(c *Clause) {
 	c.activity += solver.clauseActivityInc
 	if c.activity > 1e6 {
@@ -358,7 +382,7 @@ func (solver *Solver) bumpClause(c *Clause) {
 	}
 }
 
-// checkAsg checks that the current assignment satisfies all clauses
+// checkAsg checks that the current assignment satisfies all clauses.
 func (solver *Solver) checkAsg() bool {
 	for _, c := range solver.clauses {
 		violated := true
@@ -375,7 +399,8 @@ func (solver *Solver) checkAsg() bool {
 	return true
 }
 
-// trimLearnts throws away the least active learnt clauses in the formula
+// trimLearnts removes the least active half of the learnt clauses from the
+// formula.
 func (solver *Solver) trimLearnts() {
 	solver.sortLearnts(0, len(solver.learntClauses)-1)
 	for i := 0; i < (len(solver.learntClauses) / 2); i++ {
@@ -396,7 +421,7 @@ func (solver *Solver) sortLearnts(low, high int) {
 
 // parition is a helper of sort learnts which returns i an index of the learnt
 // clause list such that all values in learnts[low:i] are < learnts[i] and all
-// values in [learnts[i+1:high]] are greater than learnts[i]
+// values in [learnts[i+1:high]] are greater than learnts[i].
 func (solver *Solver) partition(low, high int) int {
 	pivot := solver.learntClauses[high]
 	i := low

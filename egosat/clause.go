@@ -1,6 +1,6 @@
 package egosat
 
-// Clause is the struct used for storing all CNF clauses
+// The Clause struct is used for storing CNF clauses.
 type Clause struct {
 	learnt   bool    // Indicates whether clause was learnt or not
 	activity float32 // Gives the activity of the clause
@@ -70,7 +70,7 @@ func (clause *Clause) calcReason(lit Lit) (reason []Lit) {
 }
 
 // removeWatched will remove the clause from the watcher lists of its first two
-// literals
+// literals.
 func (clause *Clause) removeWatched(solver *Solver) {
 	for i := 0; i < 2; i++ {
 		solver.removeWatcher(clause.lits[i], clause)
