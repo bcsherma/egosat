@@ -3,7 +3,7 @@ package egosat
 // The Clause struct is used for storing CNF clauses.
 type Clause struct {
 	learnt   bool    // Indicates whether clause was learnt or not
-	activity float32 // Gives the activity of the clause
+	activity float64 // Gives the activity of the clause
 	lits     []Lit   //
 }
 

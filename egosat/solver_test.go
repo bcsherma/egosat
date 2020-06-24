@@ -153,7 +153,7 @@ func TestUndoOne(t *testing.T) {
 		level:            []int{0, 1, 2, -1, 1},
 		trail:            []Lit{1, 4, -2},
 		clauses:          []*Clause{{lits: []Lit{-1, -4}}},
-		variableActivity: make([]float32, 5),
+		variableActivity: make([]float64, 5),
 	}
 	solver.variableOrder = createQueue(solver, 5)
 	for i := 1; i <= 4; i++ {
@@ -220,7 +220,7 @@ func TestSearch(t *testing.T) {
 		trail:            make([]Lit, 0, nVars),
 		reasons:          make([]*Clause, nVars+1),
 		level:            make([]int, nVars+1),
-		variableActivity: make([]float32, nVars+1),
+		variableActivity: make([]float64, nVars+1),
 	}
 	solver.variableOrder = createQueue(solver, nVars)
 	for i := 1; i <= nVars; i++ {
@@ -252,7 +252,7 @@ func TestSortLearnts(t *testing.T) {
 		trail:            make([]Lit, 0, nVars),
 		reasons:          make([]*Clause, nVars+1),
 		level:            make([]int, nVars+1),
-		variableActivity: make([]float32, nVars+1),
+		variableActivity: make([]float64, nVars+1),
 	}
 	solver.variableOrder = createQueue(solver, nVars)
 	for i := 1; i <= nVars; i++ {

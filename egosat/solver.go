@@ -9,8 +9,8 @@ import (
 type SolverParams struct {
 	MaxConflict         int     // Number of conflicts before restart is required
 	MaxLearnts          int     // Maximum number of learnt clauses to store at one time
-	VarActivityDecay    float32 // Decay factor for variable activities
-	ClauseActivityDecay float32 // Decay factor for clause activities
+	VarActivityDecay    float64 // Decay factor for variable activities
+	ClauseActivityDecay float64 // Decay factor for clause activities
 }
 
 // The Solver struct contains the formula as well as the state of the solver
@@ -18,11 +18,11 @@ type SolverParams struct {
 type Solver struct {
 	clauses             []*Clause
 	learntClauses       []*Clause
-	clauseActivityInc   float32
-	clauseActivityDecay float32
-	varActivityInc      float32
-	varActivityDecay    float32
-	variableActivity    []float32
+	clauseActivityInc   float64
+	clauseActivityDecay float64
+	varActivityInc      float64
+	varActivityDecay    float64
+	variableActivity    []float64
 	variableOrder       *queue
 	watcherLists        [][]*Clause
 	propQueue           []Lit
@@ -39,18 +39,20 @@ type Solver struct {
 // structures.
 func CreateSolver(nClauses, nVars int) *Solver {
 	solver := &Solver{
-		clauses:          make([]*Clause, 0, nClauses),
-		learntClauses:    make([]*Clause, 0, 100),
-		watcherLists:     make([][]*Clause, 2*nVars),
-		assignments:      make([]Lbool, nVars+1),
-		trail:            make([]Lit, 0, nVars),
-		reasons:          make([]*Clause, nVars+1),
-		level:            make([]int, nVars+1),
-		variableActivity: make([]float32, nVars+1),
+		clauses:           make([]*Clause, 0, nClauses),
+		learntClauses:     make([]*Clause, 0, 100),
+		watcherLists:      make([][]*Clause, 2*nVars),
+		assignments:       make([]Lbool, nVars+1),
+		trail:             make([]Lit, 0, nVars),
+		reasons:           make([]*Clause, nVars+1),
+		level:             make([]int, nVars+1),
+		variableActivity:  make([]float64, nVars+1),
+		varActivityInc:    1,
+		clauseActivityInc: 1,
 	}
 	solver.variableOrder = createQueue(solver, nVars)
 	for i := 1; i <= nVars; i++ {
-		solver.variableActivity[i] = 1e6
+		solver.variableActivity[i] = 0.
 		solver.variableOrder.insert(i)
 	}
 	return solver
@@ -119,8 +121,8 @@ func (solver *Solver) Search(params SolverParams) Lbool {
 			learnt, level := solver.analyze(conflict)
 			solver.cancelUntil(level)
 			solver.record(learnt)
-			solver.varActivityInc *= params.VarActivityDecay
-			solver.clauseActivityInc *= params.ClauseActivityDecay
+			solver.varActivityInc *= 1 / params.VarActivityDecay
+			solver.clauseActivityInc *= 1 / params.ClauseActivityDecay
 		} else {
 			if len(solver.learntClauses) > params.MaxLearnts {
 				solver.trimLearnts()
@@ -359,7 +361,7 @@ func (solver *Solver) analyze(confl *Clause) (learnt []Lit, level int) {
 // pickVar selects the highest activity unbound variable for assumption.
 func (solver *Solver) pickVar() Lit {
 	for {
-		v := solver.variableOrder.removeMin()
+		v := solver.variableOrder.removeMax()
 		if solver.assignments[v] == LNULL {
 			if rand.Float64() < 0.5 {
 				return Lit(-1 * v)
@@ -376,10 +378,11 @@ func (solver *Solver) bumpVar(v int) {
 	if solver.variableOrder.contains(v) {
 		solver.variableOrder.moveUp(v)
 	}
-	if solver.variableActivity[v] > 1e6 {
+	if solver.variableActivity[v] > 1e100 {
 		for i := 1; i < len(solver.variableActivity); i++ {
-			solver.variableActivity[i] *= 1e-6
+			solver.variableActivity[i] *= 1e-100
 		}
+		solver.varActivityInc *= 1e-100
 	}
 }
 
@@ -387,10 +390,11 @@ func (solver *Solver) bumpVar(v int) {
 // clause activities if necessary.
 func (solver *Solver) bumpClause(c *Clause) {
 	c.activity += solver.clauseActivityInc
-	if c.activity > 1e6 {
+	if c.activity > 1e100 {
 		for i := 0; i < len(solver.learntClauses); i++ {
-			solver.learntClauses[i].activity *= 1e-6
+			solver.learntClauses[i].activity *= 1e-100
 		}
+		solver.clauseActivityInc *= 1e-100
 	}
 }
 

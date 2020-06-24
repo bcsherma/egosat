@@ -22,6 +22,7 @@ func createQueue(solver *Solver, capacity int) *queue {
 	}
 }
 
+// contains returns true if the queue contains the given element else false
 func (q *queue) contains(v int) bool {
 	_, ok := q.indices[v]
 	return ok
@@ -34,8 +35,8 @@ func (q *queue) insert(n int) {
 	q.moveUp(n)
 }
 
-// removeMin pops the minimum key from the heap
-func (q *queue) removeMin() int {
+// removeMin pops the maxmimum key from the heap
+func (q *queue) removeMax() int {
 	ret := q.heap[0]
 	delete(q.indices, ret)
 	q.heap[0] = q.heap[len(q.heap)-1]
@@ -52,7 +53,7 @@ func (q *queue) removeMin() int {
 func (q *queue) moveUp(n int) {
 	i := q.indices[n]
 	a := q.priority(i)
-	for i > 0 && q.priority(parent(i)) > a {
+	for i > 0 && q.priority(parent(i)) < a {
 		q.indices[q.heap[parent(i)]] = i
 		q.heap[i] = q.heap[parent(i)]
 		i = parent(i)
@@ -68,12 +69,12 @@ func (q *queue) moveDown(n int) {
 	a := q.priority(i)
 	var j int
 	for leftChild(i) < len(q.heap) {
-		if rightChild(i) >= len(q.heap) || q.priority(leftChild(i)) < q.priority(rightChild(i)) {
+		if rightChild(i) >= len(q.heap) || q.priority(leftChild(i)) > q.priority(rightChild(i)) {
 			j = leftChild(i)
 		} else {
 			j = rightChild(i)
 		}
-		if q.priority(j) > a {
+		if q.priority(j) < a {
 			break
 		}
 		q.indices[q.heap[j]] = i
@@ -84,6 +85,6 @@ func (q *queue) moveDown(n int) {
 	q.heap[i] = n
 }
 
-func (q *queue) priority(i int) float32 {
+func (q *queue) priority(i int) float64 {
 	return q.solver.variableActivity[q.heap[i]]
 }
