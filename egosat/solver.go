@@ -13,6 +13,14 @@ type SolverParams struct {
 	ClauseActivityDecay float64 // Decay factor for clause activities
 }
 
+// The SolverStats struct is used to store statistics about the search process
+type SolverStats struct {
+	NumConflicts   int // Number of conflicts encountered
+	NumRestarts    int // Number of restarts
+	NumAssumptions int // Number of branching decisions made
+	NumLearntUnit  int // Number of learnt unit clauses
+}
+
 // The Solver struct contains the formula as well as the state of the solver
 // over the course of solving the formulae.
 type Solver struct {
@@ -31,6 +39,7 @@ type Solver struct {
 	trailDelim          []int
 	reasons             []*Clause
 	level               []int
+	stats               SolverStats
 }
 
 // CreateSolver creates a new Solver for a formulae with the given number of
@@ -49,10 +58,11 @@ func CreateSolver(nClauses, nVars int) *Solver {
 		variableActivity:  make([]float64, nVars+1),
 		varActivityInc:    1,
 		clauseActivityInc: 1,
+		stats:             SolverStats{NumRestarts: -1},
 	}
 	solver.variableOrder = createQueue(solver, nVars)
 	for i := 1; i <= nVars; i++ {
-		solver.variableActivity[i] = 0.
+		solver.variableActivity[i] = rand.Float64()
 		solver.variableOrder.insert(i)
 	}
 	return solver
@@ -80,7 +90,10 @@ func (solver *Solver) AddClause(lits []Lit, learnt bool) (bool, *Clause) {
 		return false, nil
 	}
 	if len(lits) == 1 {
-		return solver.enqueue(lits[0], nil), nil
+		if learnt {
+			solver.stats.NumLearntUnit++
+		}
+		return solver.newFact(lits[0]), nil
 	}
 	clause := &Clause{
 		lits:     lits,
@@ -107,15 +120,17 @@ func (solver *Solver) AddClause(lits []Lit, learnt bool) (bool, *Clause) {
 func (solver *Solver) Search(params SolverParams) Lbool {
 	var conflict *Clause
 	var numConflicts int
+	solver.stats.NumRestarts++
 	for {
 		conflict = solver.propagate()
 		if conflict != nil {
+			solver.stats.NumConflicts++
 			numConflicts++
 			solver.bumpClause(conflict)
 			for _, l := range conflict.lits {
 				solver.bumpVar(l.variable())
 			}
-			if solver.decisionLevel() == 0 {
+			if solver.DecisionLevel() == 0 {
 				return LFALSE
 			}
 			learnt, level := solver.analyze(conflict)
@@ -124,10 +139,14 @@ func (solver *Solver) Search(params SolverParams) Lbool {
 			solver.varActivityInc *= 1 / params.VarActivityDecay
 			solver.clauseActivityInc *= 1 / params.ClauseActivityDecay
 		} else {
+			if solver.DecisionLevel() == 0 {
+				solver.simplifyClauses(&solver.clauses)
+				solver.simplifyClauses(&solver.learntClauses)
+			}
 			if len(solver.learntClauses) > params.MaxLearnts {
 				solver.trimLearnts()
 			}
-			if solver.numAssigns() == solver.numVariables() {
+			if solver.NumAssigns() == solver.NumVariables() {
 				if solver.checkAsg() {
 					return LTRUE
 				}
@@ -137,8 +156,8 @@ func (solver *Solver) Search(params SolverParams) Lbool {
 				solver.cancelUntil(0)
 				return LNULL
 			}
-			l := solver.pickVar()
-			solver.assume(l)
+			solver.assume(solver.pickVar())
+			solver.stats.NumAssumptions++
 		}
 	}
 }
@@ -161,22 +180,30 @@ func (solver *Solver) PrintModel() {
 	fmt.Print("0\n")
 }
 
-// decisionLevel returns the current decision level of the solver.
-func (solver *Solver) decisionLevel() int { return len(solver.trailDelim) }
+// PrintStats will print out the solver statistics
+func (solver *Solver) PrintStats() {
+	fmt.Println("c number of restarts: ", solver.stats.NumRestarts)
+	fmt.Println("c number of conflicts: ", solver.stats.NumConflicts)
+	fmt.Println("c number of assumptions: ", solver.stats.NumAssumptions)
+	fmt.Println("c number of learnt units: ", solver.stats.NumLearntUnit)
+}
 
-// numVariables returns the number of variables in the formula.
-func (solver *Solver) numVariables() int { return len(solver.assignments) - 1 }
+// DecisionLevel returns the current decision level of the solver.
+func (solver *Solver) DecisionLevel() int { return len(solver.trailDelim) }
 
-// numClauses returns the number of clauses in the formula.
-func (solver *Solver) numClauses() int { return len(solver.clauses) }
+// NumVariables returns the number of variables in the formula.
+func (solver *Solver) NumVariables() int { return len(solver.assignments) - 1 }
 
-// numLearnts returns the number of learnt clauses in the formula.
-func (solver *Solver) numLearnts() int {
+// NumClauses returns the number of clauses in the formula.
+func (solver *Solver) NumClauses() int { return len(solver.clauses) }
+
+// NumLearnts returns the number of learnt clauses in the formula.
+func (solver *Solver) NumLearnts() int {
 	return len(solver.learntClauses)
 }
 
-// numAssigns returns the number of assignments that have been made.
-func (solver *Solver) numAssigns() (n int) {
+// NumAssigns returns the number of assignments that have been made.
+func (solver *Solver) NumAssigns() (n int) {
 	for _, val := range solver.assignments[1:] {
 		if val != LNULL {
 			n++
@@ -229,6 +256,24 @@ func (solver *Solver) clearWatchers(lit Lit) (clauses []*Clause) {
 	return
 }
 
+//
+func (solver *Solver) newFact(lit Lit) bool {
+	if solver.litValue(lit) != 0 {
+		if solver.litValue(lit) == LTRUE {
+			return true
+		}
+		return false
+	}
+	solver.assignments[lit.variable()] = lit.polarity()
+	solver.level[lit.variable()] = 0 // set decision level to 0
+	solver.trail = append([]Lit{lit}, solver.trail...)
+	for i := 0; i < len(solver.trailDelim); i++ {
+		solver.trailDelim[i]++
+	}
+	solver.propQueue = append(solver.propQueue, lit)
+	return true
+}
+
 // enqueue adds a literal to the propagation queue.
 func (solver *Solver) enqueue(lit Lit, from *Clause) bool {
 	if solver.litValue(lit) != 0 {
@@ -238,7 +283,7 @@ func (solver *Solver) enqueue(lit Lit, from *Clause) bool {
 		return false
 	}
 	solver.assignments[lit.variable()] = lit.polarity()
-	solver.level[lit.variable()] = solver.decisionLevel()
+	solver.level[lit.variable()] = solver.DecisionLevel()
 	solver.reasons[lit.variable()] = from
 	solver.trail = append(solver.trail, lit)
 	solver.propQueue = append(solver.propQueue, lit)
@@ -281,7 +326,7 @@ func (solver *Solver) cancel() {
 
 // cancel decisions until at the given decision level.
 func (solver *Solver) cancelUntil(level int) {
-	for solver.decisionLevel() > level {
+	for solver.DecisionLevel() > level {
 		solver.cancel()
 	}
 }
@@ -321,7 +366,7 @@ func (solver *Solver) propagate() *Clause {
 // which the learnt clauses becomes unit.
 func (solver *Solver) analyze(confl *Clause) (learnt []Lit, level int) {
 	learnt = []Lit{0}
-	var seen = make([]bool, solver.numVariables()+1)
+	var seen = make([]bool, solver.NumVariables()+1)
 	var counter = 0
 	var p Lit = Lit(0)
 	var reason []Lit
@@ -331,7 +376,7 @@ func (solver *Solver) analyze(confl *Clause) (learnt []Lit, level int) {
 			var q = reason[j]
 			if !seen[q.variable()] {
 				seen[q.variable()] = true
-				if solver.level[q.variable()] == solver.decisionLevel() {
+				if solver.level[q.variable()] == solver.DecisionLevel() {
 					counter++
 				} else if solver.level[q.variable()] > 0 {
 					learnt = append(learnt, q.negation())
@@ -451,4 +496,17 @@ func (solver *Solver) partition(low, high int) int {
 	solver.learntClauses[i], solver.learntClauses[high] = // swap values
 		solver.learntClauses[high], solver.learntClauses[i]
 	return i
+}
+
+func (solver *Solver) simplifyClauses(clauses *[]*Clause) {
+	var j int
+	for i := 0; i < len(*clauses); i++ {
+		if (*clauses)[i].simplify(solver) {
+			(*clauses)[i].removeWatched(solver)
+		} else {
+			(*clauses)[j] = (*clauses)[i]
+			j++
+		}
+	}
+	*clauses = (*clauses)[:j]
 }

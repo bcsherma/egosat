@@ -35,7 +35,7 @@ func (q *queue) insert(n int) {
 	q.moveUp(n)
 }
 
-// removeMin pops the maxmimum key from the heap
+// removeMax pops the maxmimum key from the heap
 func (q *queue) removeMax() int {
 	ret := q.heap[0]
 	delete(q.indices, ret)
