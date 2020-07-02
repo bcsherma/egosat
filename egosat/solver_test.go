@@ -147,33 +147,6 @@ func TestDequeue(t *testing.T) {
 	}
 }
 
-func TestUndoOne(t *testing.T) {
-	solver := &Solver{
-		assignments:      []Lbool{LNULL, LTRUE, LFALSE, LNULL, LTRUE},
-		level:            []int{0, 1, 2, -1, 1},
-		trail:            []Lit{1, 4, -2},
-		clauses:          []*Clause{{lits: []Lit{-1, -4}}},
-		variableActivity: make([]float64, 5),
-	}
-	solver.variableOrder = createQueue(solver, 5)
-	for i := 1; i <= 4; i++ {
-		solver.variableActivity[i] = 1e6
-		solver.variableOrder.insert(i)
-	}
-	solver.reasons = []*Clause{nil, nil, nil, nil, solver.clauses[0]}
-	solver.undoOne()
-	if solver.assignments[2] != LNULL || solver.level[2] != -1 {
-		t.Fail()
-	}
-	if len(solver.trail) != 2 {
-		t.Fail()
-	}
-	solver.undoOne()
-	if solver.assignments[4] != LNULL || solver.level[4] != -1 || solver.reasons[4] != nil {
-		t.Fail()
-	}
-}
-
 func TestPropagate(t *testing.T) {
 	solver := CreateSolver(10, 10)
 	solver.AddClause([]Lit{-1, -2}, false)
@@ -211,22 +184,7 @@ func TestAnalyze(t *testing.T) {
 }
 
 func TestSearch(t *testing.T) {
-	nVars := 10
-	solver := &Solver{
-		clauses:          make([]*Clause, 0, 10),
-		learntClauses:    make([]*Clause, 0, 10),
-		watcherLists:     make([][]*Clause, 2*nVars),
-		assignments:      make([]Lbool, nVars+1),
-		trail:            make([]Lit, 0, nVars),
-		reasons:          make([]*Clause, nVars+1),
-		level:            make([]int, nVars+1),
-		variableActivity: make([]float64, nVars+1),
-	}
-	solver.variableOrder = createQueue(solver, nVars)
-	for i := 1; i <= nVars; i++ {
-		solver.variableActivity[i] = 1e6
-		solver.variableOrder.insert(i)
-	}
+	solver := CreateSolver(10, 10)
 	solver.AddClause([]Lit{1, 2}, false)
 	solver.AddClause([]Lit{-1, 2}, false)
 	solver.AddClause([]Lit{-1, -2}, false)
@@ -243,22 +201,7 @@ func TestSearch(t *testing.T) {
 }
 
 func TestSortLearnts(t *testing.T) {
-	nVars := 10
-	solver := &Solver{
-		clauses:          make([]*Clause, 0, 10),
-		learntClauses:    make([]*Clause, 0, 10),
-		watcherLists:     make([][]*Clause, 2*nVars),
-		assignments:      make([]Lbool, nVars+1),
-		trail:            make([]Lit, 0, nVars),
-		reasons:          make([]*Clause, nVars+1),
-		level:            make([]int, nVars+1),
-		variableActivity: make([]float64, nVars+1),
-	}
-	solver.variableOrder = createQueue(solver, nVars)
-	for i := 1; i <= nVars; i++ {
-		solver.variableActivity[i] = 1e6
-		solver.variableOrder.insert(i)
-	}
+	solver := CreateSolver(10, 10)
 	_, c1 := solver.AddClause([]Lit{1, 2, 3}, true)
 	c1.activity = 3.0
 	_, c2 := solver.AddClause([]Lit{1, 2, 3}, true)

@@ -2,7 +2,6 @@ package egosat
 
 import (
 	"fmt"
-	"math/rand"
 )
 
 // The SolverParams struct stores the solver parameters pertaining to search.
@@ -30,7 +29,7 @@ type Solver struct {
 	clauseActivityDecay float64
 	varActivityInc      float64
 	varActivityDecay    float64
-	variableActivity    []float64
+	literalActivity     []float64
 	variableOrder       *queue
 	watcherLists        [][]*Clause
 	propQueue           []Lit
@@ -55,15 +54,17 @@ func CreateSolver(nClauses, nVars int) *Solver {
 		trail:             make([]Lit, 0, nVars),
 		reasons:           make([]*Clause, nVars+1),
 		level:             make([]int, nVars+1),
-		variableActivity:  make([]float64, nVars+1),
+		literalActivity:   make([]float64, 2*nVars),
 		varActivityInc:    1,
 		clauseActivityInc: 1,
 		stats:             SolverStats{NumRestarts: -1},
 	}
 	solver.variableOrder = createQueue(solver, nVars)
 	for i := 1; i <= nVars; i++ {
-		solver.variableActivity[i] = rand.Float64()
-		solver.variableOrder.insert(i)
+		solver.literalActivity[Lit(i).index()] = 0.
+		solver.literalActivity[Lit(-i).index()] = 0.
+		solver.variableOrder.insert(Lit(i))
+		solver.variableOrder.insert(Lit(-i))
 	}
 	return solver
 }
@@ -107,6 +108,9 @@ func (solver *Solver) AddClause(lits []Lit, learnt bool) (bool, *Clause) {
 	}
 	solver.addWatcher(lits[0].negation(), clause)
 	solver.addWatcher(lits[1].negation(), clause)
+	for i := 0; i < len(lits); i++ {
+		solver.bumpLit(lits[i])
+	}
 	return true, clause
 }
 
@@ -128,7 +132,7 @@ func (solver *Solver) Search(params SolverParams) Lbool {
 			numConflicts++
 			solver.bumpClause(conflict)
 			for _, l := range conflict.lits {
-				solver.bumpVar(l.variable())
+				solver.bumpLit(l)
 			}
 			if solver.DecisionLevel() == 0 {
 				return LFALSE
@@ -156,7 +160,7 @@ func (solver *Solver) Search(params SolverParams) Lbool {
 				solver.cancelUntil(0)
 				return LNULL
 			}
-			solver.assume(solver.pickVar())
+			solver.assume(solver.pickLit())
 			solver.stats.NumAssumptions++
 		}
 	}
@@ -305,7 +309,8 @@ func (solver *Solver) undoOne() {
 	solver.reasons[v] = nil
 	solver.level[v] = -1
 	solver.trail = solver.trail[:len(solver.trail)-1]
-	solver.variableOrder.insert(v)
+	solver.variableOrder.insert(Lit(v))
+	solver.variableOrder.insert(Lit(-v))
 }
 
 // assume will force the given literal to be true by assigning its variable.
@@ -339,7 +344,7 @@ func (solver *Solver) record(lits []Lit) {
 
 // varActivityCmp compares the activity of two variables.
 func (solver *Solver) varActivityCmp(var1 int, var2 int) bool {
-	return solver.variableActivity[var1] < solver.variableActivity[var2]
+	return solver.literalActivity[var1] < solver.literalActivity[var2]
 }
 
 // propagate invokes clause propagation for all watchers of each literal in the
@@ -403,29 +408,26 @@ func (solver *Solver) analyze(confl *Clause) (learnt []Lit, level int) {
 	return
 }
 
-// pickVar selects the highest activity unbound variable for assumption.
-func (solver *Solver) pickVar() Lit {
+// pickLit selects the highest activity unbound literal for assumption.
+func (solver *Solver) pickLit() Lit {
 	for {
-		v := solver.variableOrder.removeMax()
-		if solver.assignments[v] == LNULL {
-			if rand.Float64() < 0.5 {
-				return Lit(-1 * v)
-			}
-			return Lit(v)
+		l := solver.variableOrder.removeMax()
+		if solver.assignments[l.variable()] == LNULL {
+			return l
 		}
 	}
 }
 
 // bumpVar increases the activity level of the given variable and rescales all
 // activities if necessary.
-func (solver *Solver) bumpVar(v int) {
-	solver.variableActivity[v] += solver.varActivityInc
-	if solver.variableOrder.contains(v) {
-		solver.variableOrder.moveUp(v)
+func (solver *Solver) bumpLit(l Lit) {
+	solver.literalActivity[l.index()] += solver.varActivityInc
+	if solver.variableOrder.contains(l) {
+		solver.variableOrder.moveUp(l)
 	}
-	if solver.variableActivity[v] > 1e100 {
-		for i := 1; i < len(solver.variableActivity); i++ {
-			solver.variableActivity[i] *= 1e-100
+	if solver.literalActivity[l.index()] > 1e100 {
+		for i := 1; i < len(solver.literalActivity); i++ {
+			solver.literalActivity[i] *= 1e-100
 		}
 		solver.varActivityInc *= 1e-100
 	}
