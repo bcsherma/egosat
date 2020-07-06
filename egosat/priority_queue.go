@@ -80,7 +80,7 @@ func (q *queue) moveDown(l Lit) {
 		} else {
 			j = rightChild(i)
 		}
-		if q.priority(j) < a {
+		if q.priority(j) <= a {
 			break
 		}
 		q.indices[q.heap[j].index()] = i

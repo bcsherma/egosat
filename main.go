@@ -105,10 +105,10 @@ func parseProblemLine(reader *bufio.Reader) (nVars int, nClauses int) {
 func main() {
 	solver := parseFormula(os.Args[1])
 	params := egosat.SolverParams{
-		MaxConflict:         1000000,
+		MaxConflict:         200,
 		MaxLearnts:          solver.NumClauses() / 3,
 		VarActivityDecay:    0.8,
-		ClauseActivityDecay: 0.95,
+		ClauseActivityDecay: 0.999,
 	}
 	for {
 		res := solver.Search(params)

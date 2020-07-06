@@ -94,7 +94,7 @@ func (solver *Solver) AddClause(lits []Lit, learnt bool) (bool, *Clause) {
 		if learnt {
 			solver.stats.NumLearntUnit++
 		}
-		return solver.newFact(lits[0]), nil
+		return solver.enqueue(lits[0], nil), nil
 	}
 	clause := &Clause{
 		lits:     lits,
@@ -260,24 +260,6 @@ func (solver *Solver) clearWatchers(lit Lit) (clauses []*Clause) {
 	return
 }
 
-//
-func (solver *Solver) newFact(lit Lit) bool {
-	if solver.litValue(lit) != 0 {
-		if solver.litValue(lit) == LTRUE {
-			return true
-		}
-		return false
-	}
-	solver.assignments[lit.variable()] = lit.polarity()
-	solver.level[lit.variable()] = 0 // set decision level to 0
-	solver.trail = append([]Lit{lit}, solver.trail...)
-	for i := 0; i < len(solver.trailDelim); i++ {
-		solver.trailDelim[i]++
-	}
-	solver.propQueue = append(solver.propQueue, lit)
-	return true
-}
-
 // enqueue adds a literal to the propagation queue.
 func (solver *Solver) enqueue(lit Lit, from *Clause) bool {
 	if solver.litValue(lit) != 0 {
@@ -358,7 +340,7 @@ func (solver *Solver) propagate() *Clause {
 				for j := i + 1; j < len(tmp); j++ {
 					solver.addWatcher(l, tmp[j])
 				}
-				solver.propQueue = []Lit{}
+				solver.propQueue = solver.propQueue[:0]
 				return tmp[i]
 			}
 		}
@@ -426,7 +408,7 @@ func (solver *Solver) bumpLit(l Lit) {
 		solver.variableOrder.moveUp(l)
 	}
 	if solver.literalActivity[l.index()] > 1e100 {
-		for i := 1; i < len(solver.literalActivity); i++ {
+		for i := 0; i < len(solver.literalActivity); i++ {
 			solver.literalActivity[i] *= 1e-100
 		}
 		solver.varActivityInc *= 1e-100
