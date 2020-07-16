@@ -23,22 +23,22 @@ type SolverStats struct {
 // The Solver struct contains the formula as well as the state of the solver
 // over the course of solving the formulae.
 type Solver struct {
-	clauses             []*Clause
-	learntClauses       []*Clause
-	clauseActivityInc   float64
-	clauseActivityDecay float64
-	varActivityInc      float64
-	varActivityDecay    float64
-	literalActivity     []float64
-	variableOrder       *queue
-	watcherLists        [][]*Clause
-	propQueue           []Lit
-	assignments         []Lbool
-	trail               []Lit
-	trailDelim          []int
-	reasons             []*Clause
-	level               []int
-	stats               SolverStats
+	clauses             []*Clause   // References to all clauses of original forumla
+	learntClauses       []*Clause   // References to all learnt clauses
+	clauseActivityInc   float64     // Increment value for clause activities
+	clauseActivityDecay float64     // Decay rate for clause activity increment
+	varActivityInc      float64     // Increment value for variable activities
+	varActivityDecay    float64     // Decay rate for variable activity increment
+	literalActivity     []float64   // Slice storing activity of every literal
+	variableOrder       *queue      // Dynamic priority queue for branch variable selection
+	watcherLists        [][]*Clause // Clauses watching each literal
+	propQueue           []Lit       // FIFO queue of unit literals for propagation
+	assignments         []Lbool     // Slice storing variable assignments
+	trail               []Lit       // Variable assignment stack
+	trailDelim          []int       // Indices separating decision levels in the trail
+	reasons             []*Clause   // Antecedent clause for assignment variables
+	level               []int       // Decision level of each variable
+	stats               SolverStats // Runtime statistics
 }
 
 // CreateSolver creates a new Solver for a formulae with the given number of
@@ -130,10 +130,6 @@ func (solver *Solver) Search(params SolverParams) Lbool {
 		if conflict != nil {
 			solver.stats.NumConflicts++
 			numConflicts++
-			solver.bumpClause(conflict)
-			for _, l := range conflict.lits {
-				solver.bumpLit(l)
-			}
 			if solver.DecisionLevel() == 0 {
 				return LFALSE
 			}
@@ -358,6 +354,12 @@ func (solver *Solver) analyze(confl *Clause) (learnt []Lit, level int) {
 	var p Lit = Lit(0)
 	var reason []Lit
 	for {
+		if confl.learnt {
+			solver.bumpClause(confl)
+		}
+		for _, l := range confl.lits {
+			solver.bumpLit(l)
+		}
 		reason = confl.calcReason(p)
 		for j := 0; j < len(reason); j++ {
 			var q = reason[j]
