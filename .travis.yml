@@ -6,7 +6,8 @@ before_install:
   - go get -t -v ./...
 
 script:
-  - go test -coverprofile=coverage.txt -covermode=atomic
+  - test -z $(gofmt -s -l $GO_FILES)
+  - go test egosat -coverprofile=coverage.txt -covermode=atomic
 
 after_success:
   - bash <(curl -s https://codecov.io/bash)
