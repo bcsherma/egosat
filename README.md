@@ -2,7 +2,8 @@
 
 ### A SAT solver written in Go, based on `minisat`
 
-![](https://travis-ci.org/bcsherma/egosat.svg?branch=master)
+[![Build Status](https://travis-ci.org/bcsherma/egosat.svg?branch=master)](https://travis-ci.org/bcsherma/egosat)
+[![codecov](https://codecov.io/gh/bcsherma/egosat/branch/master/graph/badge.svg)](https://codecov.io/gh/bcsherma/egosat)
 
 ## Installation
 
