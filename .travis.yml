@@ -6,7 +6,7 @@ before_install:
   - go get -t -v ./...
 
 script:
-  - test -z $(gofmt -s -l $GO_FILES)
+  - test -z $(gofmt -s -l main.go egosat/*.go)
   - go test egosat -coverprofile=coverage.txt -covermode=atomic
 
 after_success:

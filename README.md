@@ -2,6 +2,8 @@
 
 ### A SAT solver written in Go, based on `minisat`
 
+![](https://travis-ci.org/bcsherma/egosat.svg?branch=master)
+
 ## Installation
 
 You can install egosat by running
