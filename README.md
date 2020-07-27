@@ -26,7 +26,7 @@ egosat my_formula.cnf
 ## Why?
 
 I have always wanted to write a SAT solver since I first learned about the
-problem and the annual satisfiability competiton. This is a vanity project
+problem and the annual satisfiability competition. This is a vanity project
 (hence the name) for me and for the time being this should only serve as a
 well-documented, straightforward adaptation of `minisat`. Many of the best ideas
 to come out of satisfiability testing research in the last few decades have yet

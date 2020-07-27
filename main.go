@@ -11,22 +11,22 @@ import (
 	"github.com/bcsherma/egosat/egosat"
 )
 
-// parseFormula will construct a new solver
-func parseFormula(filename string) (solver *egosat.Solver) {
-	reader := createFormulaReader(filename)
+// parseFormula reads a DIMACS formatted CNF file and creates a Solver instance
+// for the formula.
+func parseFormula(f string) (solver *egosat.Solver) {
+	reader := createFormulaReader(f)
 	nVars, nClauses := parseProblemLine(reader)
 	solver = egosat.CreateSolver(nClauses, nVars)
 	parseClauses(reader, solver)
 	return
 }
 
-// parseClauses will parse clauses from the formula in the reader and add them to
-// the given solver
-func parseClauses(reader *bufio.Reader, solver *egosat.Solver) {
+// parseClauses reads clauses from r and adds them to solver.
+func parseClauses(r *bufio.Reader, solver *egosat.Solver) {
 	for {
 		// TODO: This requires a newline at the end of the file, should accept
 		// formulae without a newline at the end
-		nextLine, err := reader.ReadString('\n')
+		nextLine, err := r.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
 				break
@@ -34,6 +34,7 @@ func parseClauses(reader *bufio.Reader, solver *egosat.Solver) {
 			panic(err)
 		}
 		var litVal int
+
 		newClause := make([]egosat.Lit, 0, 10) // initialize capacity for 10
 		for _, lit := range strings.Fields(nextLine) {
 			litVal, err = strconv.Atoi(lit)
@@ -48,8 +49,8 @@ func parseClauses(reader *bufio.Reader, solver *egosat.Solver) {
 	}
 }
 
-// createFormulaReader will open a reader for the formula with the comment
-// lines already removed
+// createFormulaReader opens f, moves the pointer to the end of the comments and
+// then returns reader.
 func createFormulaReader(filename string) (reader *bufio.Reader) {
 	f, err := os.Open(filename)
 	if err != nil {
@@ -60,16 +61,16 @@ func createFormulaReader(filename string) (reader *bufio.Reader) {
 	return
 }
 
-// chompComments takes as input a buffered file reader and consumes a prefix of
-// lines beginning with the character c.
-func chompComments(reader *bufio.Reader) {
+// chompComments consumes a prefix of lines beginning with the character c from
+// r.
+func chompComments(r *bufio.Reader) {
 	for {
-		nextChar, err := reader.Peek(1)
+		nextChar, err := r.Peek(1)
 		if err != nil {
 			panic(err)
 		}
 		if nextChar[0] == 'c' {
-			_, err := reader.ReadBytes('\n')
+			_, err := r.ReadBytes('\n')
 			if err != nil {
 				panic(err)
 			}
@@ -79,11 +80,11 @@ func chompComments(reader *bufio.Reader) {
 	}
 }
 
-// parseProblemLine reads the problem line from a buffered file reader
-// starting with the problem line.
-func parseProblemLine(reader *bufio.Reader) (nVars int, nClauses int) {
+// parseProblemLine reads a problem declaration from the first line of r and
+// returns the stated number of variables and clauses.
+func parseProblemLine(r *bufio.Reader) (nVars int, nClauses int) {
 	var err error
-	problemLine, _ := reader.ReadString('\n')
+	problemLine, _ := r.ReadString('\n')
 	if problemLine[0] != 'p' {
 		panic(fmt.Errorf("First char of problem line should be p, not %b", problemLine[0]))
 	}
