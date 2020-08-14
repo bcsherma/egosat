@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bcsherma/egosat/egosat"
+	egosat "github.com/bcsherma/egosat/solver"
 )
 
 // parseFormula reads a DIMACS formatted CNF file and creates a Solver instance
